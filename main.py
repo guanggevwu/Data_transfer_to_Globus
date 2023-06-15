@@ -4,50 +4,68 @@ import os
 from tkinter import *
 from tkinter import ttk
 import webbrowser
+from threading import Thread
+import time
 
-
-    
 class DataUpload:
     def __init__(self, root):
+        self.count = 0
         with open("start_up.txt") as file:
-            self.directory_path, self.CLIENT_ID, self.endpoint_id = [f.strip() for f in list(file)]
-        self.dir_parts = self.directory_path.split(os.sep)
+            self.lines = file.readlines()
+            self.start_up_path, self.CLIENT_ID, self.start_up_source_endpoint, self.start_up_destination_endpoint = [line.strip() for line in self.lines]
         root.title("Upload data to UM Data Den")
         s = ttk.Style()
         s.configure('Sty1.TLabelframe.Label', foreground="blue", font=('Times', 15))
         
         pad_widget = "0 0 0 10"
-        frame1  = ttk.Labelframe(root, text='Data information', padding=pad_widget, style='Sty1.TLabelframe')
-
+        frame1  = ttk.Labelframe(root, text='Data Information', padding=pad_widget, style='Sty1.TLabelframe')
         frame1.grid(column=0, row=0, sticky=(N, W, E, S))
 
-        ttk.Label(frame1, text='Directory Path: ').grid(column=1, row=1, columnspan=1, sticky=W)
-        self.dir_var = StringVar(value=self.directory_path)
+        ttk.Label(frame1, text='Directory Path: ').grid(column=1, row=1, columnspan=1, sticky='W')
+        self.dir_var = StringVar(value=self.start_up_path)
         dir_entry = ttk.Entry(frame1, width=80, textvariable=self.dir_var)
-        dir_entry.grid(column=2, row=1, columnspan=1, sticky=(W, E))
+        dir_entry.grid(column=2, row=1, columnspan=3, sticky=(W))
 
+        ttk.Label(frame1, text='Source Endpoint: ').grid(column=1, row=2, columnspan=1, sticky='')
+        self.source_var = StringVar(value=self.start_up_source_endpoint)
+        source_entry = ttk.Entry(frame1, width=20, textvariable=self.source_var)
+        source_entry.grid(column=2, row=2, columnspan=1, sticky=(W))
+
+        ttk.Label(frame1, text='Destination Endpoint: ').grid(column=3, row=2, columnspan=1, sticky='E')
+        self.destination_var = StringVar(value=self.start_up_destination_endpoint)
+        destinstion_entry = ttk.Entry(frame1, width=20, textvariable=self.destination_var, state="disabled")
+        destinstion_entry.grid(column=4, row=2, columnspan=1, sticky=(W))
 
         frame2  = ttk.Labelframe(root, text='Operation', padding=pad_widget, style='Sty1.TLabelframe')
         frame2.grid(column=0, row=1, sticky=(N, W, E, S))
         frame2.grid_columnconfigure(0, weight=1)
         frame2.grid_columnconfigure(1, weight=1)
 
-        # frame2.grid_rowconfigure(0, weight=1)
         self.b1 = ttk.Button(frame2, text="Connect to Globus", command=self.connect)
         self.b1.grid(column=0, row=0, columnspan=1, sticky=[W, E])
         self.b2 = ttk.Button(frame2, text="Compress and Upload", command=self.compression_and_upload)
         self.b2.grid(column=1, row=0, columnspan=1, sticky=[W, E])
 
-        self.task_var = StringVar()
-        self.frame3  = ttk.Labelframe(root, text='Task information', padding=pad_widget, style='Sty1.TLabelframe')
+        self.frame3  = ttk.Labelframe(root, text='Task Information', padding=pad_widget, style='Sty1.TLabelframe')
         self.frame3.grid(column=0, row=2, sticky=(N, W, E, S))
-        self.message_label = ttk.Label(self.frame3, textvariable = self.task_var)
-        self.message_label.grid(column=0, row=0, columnspan=1, sticky=W)
+
+
+        self.t = Text(self.frame3, width = 70, height=10, wrap=WORD)
+        self.t.grid(column=0, row=0, columnspan=1, sticky=W)
+        self.t.insert(INSERT, "Started.\n")
+        sb = ttk.Scrollbar(self.frame3,
+                            orient='vertical',
+                            command=self.t.yview)
+
+        sb.grid(column=1, row=0, sticky=NS)
+        self.t['yscrollcommand'] = sb.set
+        self.t['state'] = 'disabled'
 
         self.status_label = ttk.Label(self.frame3, text="", foreground="red", cursor="hand2", font=('Times', 12, 'underline'))
 
         for child in [frame1.winfo_children()[childidx] for childidx in [0,1]]: 
             child.grid_configure(padx=[0,0], pady=3)  
+
 
         for child in [frame2.winfo_children()[childidx] for childidx in [0,1]]: 
             child.grid_configure(padx=[0,0], pady=3)  
@@ -55,23 +73,30 @@ class DataUpload:
         for child in [self.frame3.winfo_children()[childidx] for childidx in [0]]: 
             child.grid_configure(padx=[0,0], pady=3)  
 
-    def connect(self):
-        self.task_var.set("Please enter the code to the popup window!")
-        self.status_label.config(text="")
+    def insert_to_disabled(self, t, text):
+        self.t['state'] = 'normal'
+        self.t.insert(END, text)
+        self.t['state'] = 'disabled'
 
-        self.ZEUS_endpoint = ZEUSEndpoint(CLIENT_ID=self.CLIENT_ID, endpoint_id=self.endpoint_id)
-        self.ZEUS_endpoint.client.oauth2_start_flow(requested_scopes=self.ZEUS_endpoint.scopes, refresh_tokens=True)
-        self.authorize_url = self.ZEUS_endpoint.client.oauth2_get_authorize_url()
+    def connect(self):
+        with open("start_up.txt", 'w') as file:
+            self.lines[2] = self.source_var.get() + "\n"
+            file.writelines(self.lines)
+        self.insert_to_disabled(self.t, "Please copy the code returned from your browser and paste it to the popup window!\n")
+        self.status_label.config(text="", foreground="black")
+
+        self.ZEUS_app = ZEUSAPP(CLIENT_ID=self.CLIENT_ID)
+        self.ZEUS_app.client.oauth2_start_flow(requested_scopes=self.ZEUS_app.scopes, refresh_tokens=True)
+        self.authorize_url = self.ZEUS_app.client.oauth2_get_authorize_url()
         webbrowser.open_new(self.authorize_url)
-        self.window1 = NewWindow(self.verify)
-        # self.window1.overrideredirect(True)
+        if  not(hasattr(self, "window1") and self.window1.winfo_exists()):
+            self.window1 = NewWindow(self.verify)
         self.window1.title("connecting")
 
-        # print(f"Please go to this URL and login:\n\n{self.authorize_url}\n")
 
     def verify(self, code):
 
-        token_response = self.ZEUS_endpoint.client.oauth2_exchange_code_for_tokens(code)
+        token_response = self.ZEUS_app.client.oauth2_exchange_code_for_tokens(code)
 
         transfer_token = token_response.by_resource_server["transfer.api.globus.org"]
         group_token = token_response.by_resource_server["groups.api.globus.org"]
@@ -84,50 +109,84 @@ class DataUpload:
         expires_at_s = transfer_token["expires_at_seconds"] + 1
 
         authorizer_transfer = globus_sdk.RefreshTokenAuthorizer(
-            transfer_rt, self.ZEUS_endpoint.client, access_token=transfer_at, expires_at=expires_at_s
+            transfer_rt, self.ZEUS_app.client, access_token=transfer_at, expires_at=expires_at_s
         )
         authorizer_group = globus_sdk.RefreshTokenAuthorizer(
-            group_rt, self.ZEUS_endpoint.client, access_token=group_at, expires_at=expires_at_s
+            group_rt, self.ZEUS_app.client, access_token=group_at, expires_at=expires_at_s
         )
-        self.ZEUS_endpoint.ac = globus_sdk.AuthClient(authorizer=authorizer_transfer)
-        self.ZEUS_endpoint.tc = globus_sdk.TransferClient(authorizer=authorizer_transfer)
-        self.ZEUS_endpoint.gc = globus_sdk.GroupsClient(authorizer=authorizer_group)
-        self.ZEUS_endpoint.gm = globus_sdk.GroupsManager(self.ZEUS_endpoint.gc)
-        
-        self.task_var.set(f"Connected to Globus successfully!")
-        self.message_label.config(foreground="green")
+        self.ZEUS_app.ac = globus_sdk.AuthClient(authorizer=authorizer_transfer)
+        self.ZEUS_app.tc = globus_sdk.TransferClient(authorizer=authorizer_transfer)
+        self.ZEUS_app.gc = globus_sdk.GroupsClient(authorizer=authorizer_group)
+        self.ZEUS_app.gm = globus_sdk.GroupsManager(self.ZEUS_app.gc)
+
+        #use first search result
+        self.ZEUS_app.source_endpoint_id = list(self.ZEUS_app.tc.endpoint_search(self.source_var.get()))[0]["id"]
+        if not self.ZEUS_app.source_endpoint_id:
+            self.insert_to_disabled(self.t, f"Can't reach source endpoint.\n")
+            return
+        self.ZEUS_app.destination_endpoint_id = list(self.ZEUS_app.tc.endpoint_search(self.destination_var.get()))[0]["id"]
+        if not self.ZEUS_app.source_endpoint_id:
+            self.insert_to_disabled(self.t, f"Can't reach destination endpoint.\n")
+            return
+        self.insert_to_disabled(self.t, "Connected to Globus successfully!\n")
+
 
     def compression_and_upload(self):
         with open("start_up.txt", 'w') as file:
-            file.write(self.dir_var.get())
-        shutil.make_archive(self.directory_path, 'zip', self.directory_path)
+            self.lines[0] = self.dir_var.get() + "\n"
+            file.writelines(self.lines)
+        self.directory_path = self.dir_var.get()
+        if not os.path.exists(self.directory_path):
+            self.insert_to_disabled(self.t, "Invalid directory path or file path. Please check again.\n")
+            return
+        self.dir_parts = self.directory_path.split(os.sep)
+
+        def threaded_function(arg):
+            shutil.make_archive(arg, 'zip', arg)
+        thread = Thread(target = threaded_function, args = (self.directory_path, ))
+
+        thread.start()
+        self.monitor(thread)
 
 
-        # for x in self.ZEUS_endpoint.tc.endpoint_search("2006client"):
-        #     print("Endpoint ID: {}".format(x["display_name"]))
 
-        #use first search result
-        source_endpoint_id = list(self.ZEUS_endpoint.tc.endpoint_search("2006client"))[0]["id"]
+    def monitor(self, thread):
+        if self.count == 0:
+            self.insert_to_disabled(self.t, f"Compressing.\n")
+        self.count += 1
+        if thread.is_alive():
+            # check the thread every 100ms
+            self.t['state'] = 'normal'
+            self.t.delete("end -2 lines","end -1 lines") 
+            self.t.insert("end",f"Compressing...Elapsed time: {self.count} s.\n")
+            self.t['state'] = 'disabled'
+            self.t.see("end")
+            root.after(1000, lambda: self.monitor(thread))
+        else:
+
+            self.insert_to_disabled(self.t, "Compression finished.\n")
+            self.count = 0
+
+            # create a Transfer task consisting of one or more items
+            task_data = globus_sdk.TransferData(
+                source_endpoint=self.ZEUS_app.source_endpoint_id, destination_endpoint=self.ZEUS_app.destination_endpoint_id
+            )
+            task_data.add_item(
+                "/"+(self.directory_path + ".zip").replace(":","").replace("\\", "/"),  # source
+                os.path.join("/experimental_data", self.dir_parts[-2],self.dir_parts[-1],  self.dir_parts[-1] ).replace("\\", "/")+".zip",  # dest
+
+            )
+
+            # submit, getting back the task ID
+            task_doc = self.ZEUS_app.tc.submit_transfer(task_data)
+            task_id = task_doc["task_id"]
+            self.insert_to_disabled(self.t, f"Submitted transfer. Task_id: {task_id}.\n")
+
+            self.status_label.config(text="Check transfer progress")
+            self.status_label.grid(column=0, row=1, columnspan=1, sticky=W)      
+            self.status_label.bind("<Button-1>", lambda e: webbrowser.open_new("https://app.globus.org/activity"))
 
 
-        # create a Transfer task consisting of one or more items
-        task_data = globus_sdk.TransferData(
-            source_endpoint=source_endpoint_id, destination_endpoint=self.ZEUS_endpoint.endpoint_id
-        )
-        task_data.add_item(
-            "/"+(self.directory_path + ".zip").replace(":","").replace("\\", "/"),  # source
-            os.path.join("/experimental_data", self.dir_parts[-3],self.dir_parts[-2],  self.dir_parts[-3] ).replace("\\", "/")+".zip",  # dest
-
-        )
-
-        # submit, getting back the task ID
-        task_doc = self.ZEUS_endpoint.tc.submit_transfer(task_data)
-        task_id = task_doc["task_id"]
-        self.task_var.set(f"Submitted transfer. Task_id={task_id}")
-
-        self.status_label.config(text="check transfer progress")
-        self.status_label.grid(column=0, row=1, columnspan=1, sticky=W)      
-        self.status_label.bind("<Button-1>", lambda e: webbrowser.open_new("https://app.globus.org/activity"))
 
 class NewWindow(Toplevel):
     def __init__(self, verify):
@@ -140,7 +199,7 @@ class NewWindow(Toplevel):
         newframe1.grid_columnconfigure(0, weight=1)
         newframe1.grid_columnconfigure(1, weight=1)
         newframe1.grid_columnconfigure(2, weight=1)
-        ttk.Label(newframe1, text="Type anything in the broswer and click \"allow\". Enter the code copied from broswer: ").grid(row=0, column=0, columnspan=3)  
+        ttk.Label(newframe1, text="Copy the code from browser and paste it here: ").grid(row=0, column=0, columnspan=3)  
 
         self.code_input_var = StringVar()
         code_entry = ttk.Entry(newframe1, width=50, textvariable=self.code_input_var)
@@ -156,10 +215,9 @@ class NewWindow(Toplevel):
         self.verify(self.code_input_var.get())
         self.destroy()
         
-class ZEUSEndpoint:
-    def __init__(self, CLIENT_ID, endpoint_id):
+class ZEUSAPP:
+    def __init__(self, CLIENT_ID,):
         self.CLIENT_ID = CLIENT_ID
-        self.endpoint_id = endpoint_id
         self.client = globus_sdk.NativeAppAuthClient(self.CLIENT_ID)
         self.scopes = ['urn:globus:auth:scope:transfer.api.globus.org:all', 'urn:globus:auth:scope:groups.api.globus.org:all']
         
