@@ -1,4 +1,5 @@
-C:\Users\User\Desktop\2023_01\Bixue Hou\day1
+C:\Users\User\Desktop\code\zip_and_upload\ignored_test\2022\Name
 e7f1672b-1233-43f7-9524-0e174f70d4e5
 2006client
 root directory for ZEUS
+upload_sub
