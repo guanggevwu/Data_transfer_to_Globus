@@ -1,5 +1,6 @@
 
 start_up.txt
+start_up_default.txt
 ignored_test/
 # Byte-compiled / optimized / DLL files
 __pycache__/

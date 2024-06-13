@@ -13,10 +13,12 @@ class DataUpload:
     def __init__(self, root):
         self.connected = False
         self.count = 0
-        with open("start_up.txt") as file:
-            self.lines = file.readlines()
-            self.start_up_path, self.CLIENT_ID, self.start_up_source_endpoint, self.start_up_destination_endpoint, self.start_up_folder_option = [
-                line.strip() for line in self.lines]
+        try:
+            self.read_start_up_file("start_up.txt")
+        except Exception:
+            self.read_start_up_file("start_up_default.txt")
+            shutil.copyfile(os.path.join(os.path.dirname(__file__), "start_up_default.txt"), os.path.join(
+                os.path.dirname(__file__), "start_up.txt"))
         root.title("Upload data to UM Data Den")
         s = ttk.Style()
         s.configure('Sty1.TLabelframe.Label',
@@ -30,9 +32,8 @@ class DataUpload:
         ttk.Label(frame1, text='Souece Directory: ').grid(
             column=1, row=1, columnspan=1, sticky='W')
         self.dir_var = StringVar(value=self.start_up_path)
-        self.input_path = self.start_up_path
         dir_entry = ttk.Entry(frame1, width=80, textvariable=self.dir_var)
-        dir_entry.bind("<FocusOut>", lambda x: self.save_dir_entry())
+        # dir_entry.bind("<FocusOut>", lambda x: self.save_dir_entry())
         dir_entry.grid(column=2, row=1, columnspan=3, sticky=(W))
 
         self.folder_option = StringVar(value=self.start_up_folder_option)
@@ -100,30 +101,43 @@ class DataUpload:
 
         self.upload_current_or_sub()
 
+    def read_start_up_file(self, filename):
+        with open(os.path.join(os.path.dirname(__file__), filename)) as file:
+            self.lines = file.readlines()
+            self.start_up_path, self.CLIENT_ID, self.start_up_source_endpoint, self.start_up_destination_endpoint, self.start_up_folder_option = [
+                line.strip() for line in self.lines]
+
     def save_dir_entry(self):
-        with open("start_up.txt", 'w') as file:
-            self.lines[0] = self.dir_var.get() + "\n"
-            file.writelines(self.lines)
-        self.input_path = self.dir_var.get()
+        if self.lines[0] != self.dir_var.get() + "\n":
+            with open(os.path.join(os.path.dirname(__file__), "start_up.txt"), 'w') as file:
+                self.lines[0] = self.dir_var.get() + "\n"
+                file.writelines(self.lines)
+
+    def save_source_entry(self):
+        if self.lines[2] != self.source_var.get() + "\n":
+            with open(os.path.join(os.path.dirname(__file__), "start_up.txt"), 'w') as file:
+                self.lines[2] = self.source_var.get() + "\n"
+                file.writelines(self.lines)
 
     def upload_current_or_sub(self):
         if self.folder_option.get() == "upload_current":
-            self.upload_folders_full = [self.input_path]
-            self.upload_folders = [self.input_path.split(os.sep)[-1]]
-            self.upper_folder = os.path.dirname(self.input_path)
+            self.upload_folders_full = [self.dir_var.get()]
+            self.upload_folders = [self.dir_var.get().split(os.sep)[-1]]
+            self.upper_folder = os.path.dirname(self.dir_var.get())
         elif self.folder_option.get() == "upload_sub":
-            self.upload_folders_full = [os.path.join(self.input_path, e) for e in os.listdir(
-                self.input_path) if os.path.isdir(os.path.join(self.input_path, e))]
+            self.upload_folders_full = [os.path.join(self.dir_var.get(), e) for e in os.listdir(
+                self.dir_var.get()) if os.path.isdir(os.path.join(self.dir_var.get(), e))]
             self.upload_folders = [e.split(os.sep)[-1]
                                    for e in self.upload_folders_full]
-            self.upper_folder = self.input_path
+            self.upper_folder = self.dir_var.get()
         self.folder_option_value = self.folder_option.get()
-        with open("start_up.txt", 'w') as file:
-            self.lines[4] = self.folder_option_value + "\n"
-            file.writelines(self.lines)
+        if self.lines[4] != self.folder_option_value + "\n":
+            with open(os.path.join(os.path.dirname(__file__), "start_up.txt"), 'w') as file:
+                self.lines[4] = self.folder_option_value + "\n"
+                file.writelines(self.lines)
 
     def get_time_string(self):
-        return datetime.now().strftime('%m/%d %H:%m:%S')
+        return datetime.now().strftime('%m/%d %H:%M:%S')
 
     def insert_to_disabled(self, t, text):
         t['state'] = 'normal'
@@ -131,9 +145,7 @@ class DataUpload:
         t['state'] = 'disabled'
 
     def connect(self):
-        with open("start_up.txt", 'w') as file:
-            self.lines[2] = self.source_var.get() + "\n"
-            file.writelines(self.lines)
+        self.save_source_entry()
         self.insert_to_disabled(
             self.t, "Please copy the code returned from your browser and paste it to the popup window!\n")
         self.status_label.config(text="", foreground="black")
@@ -194,11 +206,13 @@ class DataUpload:
         self.connected = True
 
     def compression_and_upload(self):
+        self.save_dir_entry()
+        self.upload_current_or_sub()
         if not self.connected:
             self.insert_to_disabled(
                 self.t, "Please connect to Globus first!\n")
             return
-        if not os.path.exists(self.input_path):
+        if not os.path.exists(self.dir_var.get()):
             self.insert_to_disabled(
                 self.t, "Invalid directory path or file path. Please check again.\n")
             return
